@@ -32,3 +32,6 @@ Clone this repo:
 ```bash
 git clone https://github.com/yourusername/gmail-to-telegram-notifier.git
 cd gmail-to-telegram-notifier
+
+pip install -r requirements.txt
+pip install google-auth google-auth-oauthlib google-api-python-client python-telegram-bot
