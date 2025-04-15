@@ -1,4 +1,5 @@
 import os
+import base64
 import pickle
 import time
 import asyncio
@@ -15,13 +16,20 @@ CHECK_INTERVAL = 3600  # in seconds
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+GMAIL_TOKEN_JSON = os.environ.get("GMAIL_TOKEN_JSON")
+# Validate env vars
+if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+    raise ValueError("❌ Telegram Bot token or Chat ID is missing.")
+
+if not GMAIL_TOKEN_JSON:
+    raise ValueError("❌ Gmail token is missing.")
 
 # ----- GMAIL AUTH -----
 def get_gmail_service():
     creds = None
-    import base64
+    token_base64 = os.environ.get("GMAIL_TOKEN_JSON")
     token_data = base64.b64decode(os.environ.get("GMAIL_TOKEN_JSON"))
-    creds = pickle.loads(token_data)
+    creds = pickle.load(io.BytesIO(token_data))
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
