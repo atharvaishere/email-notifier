@@ -13,21 +13,21 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 COMPANY_KEYWORDS = ['Compass Education', 'Swappsi', 'Arista Networks', '']  # <- Add more if needed
 CHECK_INTERVAL = 3600  # in seconds
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 # ----- GMAIL AUTH -----
 def get_gmail_service():
     creds = None
     import base64
-    token_data = base64.b64decode(os.getenv("GMAIL_TOKEN_JSON"))
+    token_data = base64.b64decode(os.environ.get("GMAIL_TOKEN_JSON"))
     creds = pickle.loads(token_data)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             import json
-            creds_dict = json.loads(os.getenv("GMAIL_CREDENTIALS_JSON"))
+            creds_dict = json.loads(os.environ.get("GMAIL_CREDENTIALS_JSON"))
             with open("temp_credentials.json", "w") as f:
                 json.dump(creds_dict, f)
             flow = InstalledAppFlow.from_client_secrets_file('temp_credentials.json', SCOPES)
