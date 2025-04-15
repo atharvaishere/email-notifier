@@ -4,6 +4,7 @@ import pickle
 import time
 import asyncio
 import io
+from bs4 import BeautifulSoup
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -13,10 +14,10 @@ from telegram import Bot
 # ----- CONFIGURATION -----
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 COMPANY_KEYWORDS = ['Compass Education', 'Swappsi', 'Arista Networks', '']  # <- Add more if needed
-CHECK_INTERVAL = 3600  # in seconds
+CHECK_INTERVAL = 10  # in seconds
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+TELEGRAM_BOT_TOKEN = "7618111671:AAHTCjauy7CiCw6bTfcQzM9ChboA90fmKYw"
+TELEGRAM_CHAT_ID = "955773698"
 GMAIL_TOKEN_JSON = """gASV5AMAAAAAAACMGWdvb2dsZS5vYXV0aDIuY3JlZGVudGlhbHOUjAtDcmVkZW50aWFsc5STlCmBlH2UKIwFdG9rZW6UjN55YTI5LmEwQVpZa05aZ0hJd1RrcjBYTmp4c1M5R0o4dk9JUVZ0Tlc4ZVBkdjdTdl81MHB4MGpnYWw2Ny1iN1ZGbzZhT1FYdmJCTUxvS21pZ1FUcU1TSDJ4S2ZoLXBoa1M3ZDZTSXhXcmdfei01QVBHZTBib0J2R3YwNmlBN2RERDliZS05cFNiSFBJN0xpakI1TjBuTkhPVmV4aVlFOEFwV0FLWnpONFp3WWVXQTcwYUNnWUtBVElTQVJJU0ZRSEdYMk1pTU9QZGt1ZllveTJzd0s5d0NHbzN5dzAxNzWUjAZleHBpcnmUjAhkYXRldGltZZSMCGRhdGV0aW1llJOUQwoH6QQPBCEbBDgZlIWUUpSMEV9xdW90YV9wcm9qZWN0X2lklE6MD190cnVzdF9ib3VuZGFyeZROjBBfdW5pdmVyc2VfZG9tYWlulIwOZ29vZ2xlYXBpcy5jb22UjBlfdXNlX25vbl9ibG9ja2luZ19yZWZyZXNolImMB19zY29wZXOUXZSMLmh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL2F1dGgvZ21haWwucmVhZG9ubHmUYYwPX2RlZmF1bHRfc2NvcGVzlE6MDl9yZWZyZXNoX3Rva2VulIxnMS8vMDNKR0ZXS2lreXlOOENnWUlBUkFBR0FNU053Ri1MOUlySlgyTDhkbEkxbExCVkRlbW9FcV9JazZRWUNrRkM1cU1Rc2FZWFNLS21NeGNTQk1SMnVoRkNxOWlxaGU3eC02ekpTSZSMCV9pZF90b2tlbpROjA9fZ3JhbnRlZF9zY29wZXOUXZSMLmh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL2F1dGgvZ21haWwucmVhZG9ubHmUYYwKX3Rva2VuX3VyaZSMI2h0dHBzOi8vb2F1dGgyLmdvb2dsZWFwaXMuY29tL3Rva2VulIwKX2NsaWVudF9pZJSMSDc0MDc4ODYzMjY4Mi01MXEydWoybmRlNzk2MDFxZnMya290YjBjdWx0b3N2MC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbZSMDl9jbGllbnRfc2VjcmV0lIwjR09DU1BYLS1tcmd3aG9GWnJKaldSV05LcHExSFZPSld4dDiUjAtfcmFwdF90b2tlbpROjBZfZW5hYmxlX3JlYXV0aF9yZWZyZXNolImMCF9hY2NvdW50lIwAlIwPX2NyZWRfZmlsZV9wYXRolE51Yi4="""
 # Validate env vars
 if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -28,7 +29,6 @@ if not GMAIL_TOKEN_JSON:
 # ----- GMAIL AUTH -----
 def get_gmail_service():
     creds = None
-    token_base64 = os.environ.get("GMAIL_TOKEN_JSON")
     token_data = base64.b64decode(GMAIL_TOKEN_JSON)
     creds = pickle.load(io.BytesIO(token_data))
     if not creds or not creds.valid:
@@ -47,13 +47,40 @@ def get_gmail_service():
 
 # ----- EMAIL CHECK FUNCTION -----
 def get_latest_email_snippets(service, max_results=5):
-    results = service.users().messages().list(userId='me', labelIds=['INBOX'], maxResults=max_results).execute()
+    query = "-category:social -category:promotions"  # Gmail query to exclude social & promotions
+    results = service.users().messages().list(userId='me', q=query, labelIds=['INBOX'], maxResults=max_results).execute()
     messages = results.get('messages', [])
     snippets = []
+
     for msg in messages:
-        msg_data = service.users().messages().get(userId='me', id=msg['id']).execute()
-        snippet = msg_data.get('snippet', '')
-        snippets.append(snippet)
+        msg_data = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
+        payload = msg_data.get('payload', {})
+        parts = payload.get('parts', [])
+        body = ''
+
+        for part in parts:
+            mime_type = part.get('mimeType')
+            body_data = part['body'].get('data')
+
+            if mime_type == 'text/plain' and body_data:
+                body = base64.urlsafe_b64decode(body_data).decode('utf-8', errors='ignore')
+                break
+            elif mime_type == 'text/html' and body_data:
+                html_content = base64.urlsafe_b64decode(body_data).decode('utf-8', errors='ignore')
+                soup = BeautifulSoup(html_content, 'html.parser')
+                body = soup.get_text()
+                break
+
+        if not body:
+            body = msg_data.get('snippet', '')
+
+        # Filter out unwanted phrases
+        lower_body = body.lower()
+        if "application submitted" in lower_body or "we regret to inform you" in lower_body:
+            continue
+
+        snippets.append(body)
+
     return snippets
 
 # ----- TELEGRAM NOTIFICATION -----
