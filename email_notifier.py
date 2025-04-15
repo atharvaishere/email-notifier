@@ -16,6 +16,7 @@ from telegram import Bot
 import warnings
 warnings.filterwarnings("ignore")
 
+
 # ----- CONFIGURATION -----
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 COMPANY_KEYWORDS = ['Compass Education', 'Swappsi', 'Arista Networks', '']  # <- Add more if needed
@@ -25,6 +26,20 @@ TELEGRAM_BOT_TOKEN = "7618111671:AAHTCjauy7CiCw6bTfcQzM9ChboA90fmKYw"
 TELEGRAM_CHAT_ID = "955773698"
 GMAIL_TOKEN_JSON = """gASV5AMAAAAAAACMGWdvb2dsZS5vYXV0aDIuY3JlZGVudGlhbHOUjAtDcmVkZW50aWFsc5STlCmBlH2UKIwFdG9rZW6UjN55YTI5LmEwQVpZa05aZ0hJd1RrcjBYTmp4c1M5R0o4dk9JUVZ0Tlc4ZVBkdjdTdl81MHB4MGpnYWw2Ny1iN1ZGbzZhT1FYdmJCTUxvS21pZ1FUcU1TSDJ4S2ZoLXBoa1M3ZDZTSXhXcmdfei01QVBHZTBib0J2R3YwNmlBN2RERDliZS05cFNiSFBJN0xpakI1TjBuTkhPVmV4aVlFOEFwV0FLWnpONFp3WWVXQTcwYUNnWUtBVElTQVJJU0ZRSEdYMk1pTU9QZGt1ZllveTJzd0s5d0NHbzN5dzAxNzWUjAZleHBpcnmUjAhkYXRldGltZZSMCGRhdGV0aW1llJOUQwoH6QQPBCEbBDgZlIWUUpSMEV9xdW90YV9wcm9qZWN0X2lklE6MD190cnVzdF9ib3VuZGFyeZROjBBfdW5pdmVyc2VfZG9tYWlulIwOZ29vZ2xlYXBpcy5jb22UjBlfdXNlX25vbl9ibG9ja2luZ19yZWZyZXNolImMB19zY29wZXOUXZSMLmh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL2F1dGgvZ21haWwucmVhZG9ubHmUYYwPX2RlZmF1bHRfc2NvcGVzlE6MDl9yZWZyZXNoX3Rva2VulIxnMS8vMDNKR0ZXS2lreXlOOENnWUlBUkFBR0FNU053Ri1MOUlySlgyTDhkbEkxbExCVkRlbW9FcV9JazZRWUNrRkM1cU1Rc2FZWFNLS21NeGNTQk1SMnVoRkNxOWlxaGU3eC02ekpTSZSMCV9pZF90b2tlbpROjA9fZ3JhbnRlZF9zY29wZXOUXZSMLmh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tL2F1dGgvZ21haWwucmVhZG9ubHmUYYwKX3Rva2VuX3VyaZSMI2h0dHBzOi8vb2F1dGgyLmdvb2dsZWFwaXMuY29tL3Rva2VulIwKX2NsaWVudF9pZJSMSDc0MDc4ODYzMjY4Mi01MXEydWoybmRlNzk2MDFxZnMya290YjBjdWx0b3N2MC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbZSMDl9jbGllbnRfc2VjcmV0lIwjR09DU1BYLS1tcmd3aG9GWnJKaldSV05LcHExSFZPSld4dDiUjAtfcmFwdF90b2tlbpROjBZfZW5hYmxlX3JlYXV0aF9yZWZyZXNolImMCF9hY2NvdW50lIwAlIwPX2NyZWRfZmlsZV9wYXRolE51Yi4="""
 NOTIFIED_IDS_FILE = "notified_ids.json"
+
+# Email filters
+BLOCKED_SENDERS = [
+    "jobs-noreply@linkedin.com",
+    "update@email.gradireland.com",
+    "noreply@digest.groww.in"
+]
+
+BLOCKED_KEYWORDS = [
+    "quora", "coding ninjas", "linkedin job alerts", "unstop",
+    "agile crew recruitment", "vercel", "esb-jobnotification",
+    "newsletters", "reddit" , "business insider"
+]
+
 # Validate env vars
 if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
     raise ValueError("❌ Telegram Bot token or Chat ID is missing.")
@@ -106,6 +121,11 @@ async def main_loop():
                 continue
 
             msg_data = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
+            headers = msg_data.get("payload", {}).get("headers", [])
+            from_email = next((h['value'] for h in headers if h['name'].lower() == 'from'), '')
+            if any(sender in from_email.lower() for sender in BLOCKED_SENDERS):
+                continue
+
             payload = msg_data.get('payload', {})
             parts = payload.get('parts', [])
             body = ''
@@ -126,11 +146,15 @@ async def main_loop():
                 body = msg_data.get('snippet', '')
 
             lower_body = body.lower()
-            if "application submitted" in lower_body or "we regret to inform you" in lower_body:
+            if (
+                "application submitted" in lower_body
+                or "we regret to inform you" in lower_body
+                or any(keyword in lower_body for keyword in BLOCKED_KEYWORDS)
+            ):
                 continue
 
             for company in COMPANY_KEYWORDS:
-                if company.lower() in body.lower():
+                if company.lower() in lower_body:
                     clean_body = clean_linkedin_email_body(body)
                     message = f"\U0001F4E9 New email related to *{company}*:\n\n{clean_body}"
                     await notify_via_telegram(message)
@@ -140,6 +164,7 @@ async def main_loop():
             save_notified_ids(notified_ids)
 
         await asyncio.sleep(CHECK_INTERVAL)
+    
     
     
 
