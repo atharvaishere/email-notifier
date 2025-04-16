@@ -35,3 +35,6 @@ cd gmail-to-telegram-notifier
 
 pip install -r requirements.txt
 pip install google-auth google-auth-oauthlib google-api-python-client python-telegram-bot
+
+
+Last updated: 2025-04-16 •
