@@ -6,6 +6,8 @@ import asyncio
 import json
 import io
 import re
+import requests
+import urllib.parse
 from bs4 import BeautifulSoup
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -14,7 +16,7 @@ from googleapiclient.discovery import build
 from telegram import Bot
 
 import warnings
-warnings.filterwarnings("ignore")
+# warnings.filterwarnings("ignore")
 
 
 # ----- CONFIGURATION -----
@@ -46,6 +48,22 @@ if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
 
 if not GMAIL_TOKEN_JSON:
     raise ValueError("❌ Gmail token is missing.")
+
+# ----- PHONE NOTIFICATIONS----
+def send_bark_notification(title, message):
+    device_key = "w74d3keiC453d2t5imvSYQ"
+    
+   
+    url = f"https://api.day.app/{device_key}/{title}/{message}"
+    
+    print("📤 Sending to Bark URL:", url)
+    try:
+        response = requests.get(url)
+        print("✅ Bark push sent:", response.status_code)
+        print("📦 Response:", response.text)
+    except Exception as e:
+        print("❌ Bark push failed:", e)
+
 
 # ----- GMAIL AUTH -----
 def get_gmail_service():
@@ -157,7 +175,11 @@ async def main_loop():
                 if company.lower() in lower_body:
                     clean_body = clean_linkedin_email_body(body)
                     message = f"\U0001F4E9 New email related to *{company}*:\n\n{clean_body}"
+                    short_message = message[:400]
                     await notify_via_telegram(message)
+                    clean_msg = re.sub(r'\s+', ' ', message.strip())
+                    short_msg = clean_msg[:400]
+                    send_bark_notification("📩 New Email Alert", short_msg)
                     break
 
             notified_ids.add(msg_id)
@@ -165,9 +187,10 @@ async def main_loop():
 
         await asyncio.sleep(CHECK_INTERVAL)
     
-    
-    
+
 
 # ----- RUN -----
 if __name__ == '__main__':
     asyncio.run(main_loop())
+    
+    
